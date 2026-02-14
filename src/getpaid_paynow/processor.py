@@ -1,6 +1,7 @@
 """Paynow payment processor."""
 
 import contextlib
+import hmac as hmac_mod
 import logging
 from decimal import Decimal
 from typing import ClassVar
@@ -109,8 +110,6 @@ class PaynowProcessor(BaseProcessor):
         :param headers: HTTP headers (must include 'Signature').
         :raises InvalidCallbackError: On missing/invalid signature.
         """
-        import hmac as hmac_mod
-
         raw_body: str = kwargs.get("raw_body", "")
         received_sig = headers.get("Signature", "")
 

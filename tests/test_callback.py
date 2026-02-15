@@ -86,6 +86,28 @@ class TestVerifyCallback:
                 raw_body=raw_body,
             )
 
+    async def test_lowercase_signature_header_is_accepted(self):
+        data, raw_body = _notification()
+        signature = _sign_body(raw_body)
+        headers = {"signature": signature}
+        processor = _make_processor()
+        await processor.verify_callback(
+            data=data,
+            headers=headers,
+            raw_body=raw_body.encode("utf-8"),
+        )
+
+    async def test_missing_raw_body_raises(self):
+        data, raw_body = _notification()
+        signature = _sign_body(raw_body)
+        headers = {"Signature": signature}
+        processor = _make_processor()
+        with pytest.raises(InvalidCallbackError, match="Missing raw_body"):
+            await processor.verify_callback(
+                data=data,
+                headers=headers,
+            )
+
     async def test_bad_signature_raises(self):
         data, raw_body = _notification()
         headers = {"Signature": "bad_signature"}

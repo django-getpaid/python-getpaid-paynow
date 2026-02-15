@@ -110,8 +110,24 @@ class PaynowProcessor(BaseProcessor):
         :param headers: HTTP headers (must include 'Signature').
         :raises InvalidCallbackError: On missing/invalid signature.
         """
-        raw_body: str = kwargs.get("raw_body", "")
-        received_sig = headers.get("Signature", "")
+        raw_body = kwargs.get("raw_body")
+        if raw_body is None:
+            raise InvalidCallbackError(
+                "Missing raw_body in callback kwargs. "
+                "The framework adapter must pass the raw HTTP body."
+            )
+        if isinstance(raw_body, (bytes, bytearray)):
+            raw_body = raw_body.decode("utf-8")
+        if not isinstance(raw_body, str):
+            raise InvalidCallbackError(
+                "raw_body must be a str or bytes value."
+            )
+
+        received_sig = ""
+        for key, value in headers.items():
+            if key.lower() == "signature":
+                received_sig = value
+                break
 
         if not received_sig:
             raise InvalidCallbackError(
@@ -224,10 +240,13 @@ class PaynowProcessor(BaseProcessor):
         """Start a refund via Paynow API."""
         client = self._get_client()
         refund_amount = amount or self.payment.amount_paid
-        await client.create_refund(
+        response = await client.create_refund(
             payment_id=self.payment.external_id,
             amount=refund_amount,
         )
+        refund_id = response.get("refundId", "")
+        if refund_id:
+            self.payment.external_refund_id = refund_id
         return refund_amount
 
     async def cancel_refund(self, **kwargs) -> bool:

@@ -312,6 +312,7 @@ class TestStartRefund:
             amount=Decimal("50.00"),
         )
         assert result == Decimal("50.00")
+        assert payment.external_refund_id == "REF-456"
 
     async def test_start_refund_full_amount(self, respx_mock):
         url = f"{SANDBOX_URL}/v3/payments/PAY-123/refunds"
@@ -324,6 +325,7 @@ class TestStartRefund:
         processor = _make_processor(payment=payment)
         result = await processor.start_refund()
         assert result == Decimal("100.00")
+        assert payment.external_refund_id == "REF-456"
 
     async def test_start_refund_sends_correct_body(self, respx_mock):
         url = f"{SANDBOX_URL}/v3/payments/PAY-123/refunds"

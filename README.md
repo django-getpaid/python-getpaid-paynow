@@ -38,7 +38,7 @@ The plugin is split into two layers:
 ### Standalone Client
 
 ```python
-import asyncio
+import anyio
 from decimal import Decimal
 from getpaid_paynow import PaynowClient
 
@@ -60,7 +60,7 @@ async def main():
         redirect_url = response["redirectUrl"]
         print(f"Redirect buyer to: {redirect_url}")
 
-asyncio.run(main())
+anyio.run(main)
 ```
 
 ### With django-getpaid

@@ -32,7 +32,7 @@ The `PaynowClient` is an async HTTP client that wraps the Paynow V3 REST API.
 Use it as an async context manager for connection reuse:
 
 ```python
-import asyncio
+import anyio
 from decimal import Decimal
 from getpaid_paynow import PaynowClient
 
@@ -56,7 +56,7 @@ async def main():
         redirect_url = response["redirectUrl"]
         print(f"Redirect buyer to: {redirect_url}")
 
-asyncio.run(main())
+anyio.run(main)
 ```
 
 ## Using with django-getpaid

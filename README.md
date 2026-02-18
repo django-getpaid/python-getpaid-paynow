@@ -1,37 +1,45 @@
-# getpaid-paynow
+# python-getpaid-paynow
 
-[![PyPI](https://img.shields.io/pypi/v/python-getpaid-paynow.svg)](https://pypi.org/project/python-getpaid-paynow/)
-[![Python Version](https://img.shields.io/pypi/pyversions/python-getpaid-paynow)](https://pypi.org/project/python-getpaid-paynow/)
-[![License](https://img.shields.io/pypi/l/python-getpaid-paynow)](https://github.com/django-getpaid/python-getpaid-paynow/blob/main/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/python-getpaid-paynow.svg)](https://pypi.org/project/python-getpaid-paynow/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python versions](https://img.shields.io/pypi/pyversions/python-getpaid-paynow.svg)](https://pypi.org/project/python-getpaid-paynow/)
 
-[Paynow](https://www.paynow.pl/) payment gateway plugin for the
-[python-getpaid](https://github.com/django-getpaid) ecosystem. Provides an
-async HTTP client (`PaynowClient`) and a payment processor (`PaynowProcessor`)
-that integrates with getpaid-core's `BaseProcessor` interface. Authentication
-uses API Key + HMAC-SHA256 signature against the Paynow V3 REST API.
+Paynow payment processor for [python-getpaid](https://github.com/django-getpaid/python-getpaid-core) ecosystem.
+Paynow is a modern Polish payment provider and a subsidiary of mBank.
 
 ## Architecture
 
 The plugin is split into two layers:
 
-- **`PaynowClient`** -- low-level async HTTP client wrapping the Paynow V3
-  REST API. Uses `httpx.AsyncClient` with API Key authentication and
-  HMAC-SHA256 request signing. Can be used standalone or as an async context
-  manager for connection reuse.
-- **`PaynowProcessor`** -- high-level payment processor implementing
-  `BaseProcessor`. Orchestrates payment creation, callback/notification
-  handling, status polling, and refunds. Integrates with the getpaid-core FSM
-  for state transitions.
+- **`PaynowClient`** -- low-level async HTTP client wrapping the Paynow V3 REST API. Uses `httpx.AsyncClient` with API Key authentication and HMAC-SHA256 request signing. Can be used standalone or as an async context manager for connection reuse.
+- **`PaynowProcessor`** -- high-level payment processor implementing `BaseProcessor`. Orchestrates payment creation, callback/notification handling, status polling, and refunds. Integrates with the getpaid-core FSM for state transitions.
 
 ## Key Features
 
 - **Create payment** -- register a payment and get a redirect URL
-- **Notification handling** -- verify HMAC signature and process status changes
-- **Status polling** -- fetch current payment status via API
+- **Notification handling** -- verify HMAC-SHA256 signature and process status changes
+- **Status polling** -- fetch current payment status via API (PULL flow)
 - **Refund** -- create, check, and cancel refunds
 - **Payment methods** -- retrieve available payment methods
-- **HMAC-SHA256 signatures** -- automatic request and notification signing
-- **PUSH and PULL** -- notification-based flow with optional status polling
+- **Sandbox mode** -- full support for testing environment
+
+**Note:** Paynow does not support pre-authorization flows. Immediate capture is used for all transactions. The `charge()` and `release_lock()` methods raise `NotImplementedError`.
+
+## Supported Currencies
+
+The processor supports the following 4 currencies:
+- **PLN** (Polish Złoty)
+- **EUR** (Euro)
+- **GBP** (British Pound)
+- **USD** (US Dollar)
+
+## Installation
+
+Install the package using pip:
+
+```bash
+pip install python-getpaid-paynow
+```
 
 ## Quick Usage
 
@@ -63,16 +71,16 @@ async def main():
 anyio.run(main)
 ```
 
-### With django-getpaid
+### With python-getpaid
 
-Register the plugin via entry point in `pyproject.toml`:
+Register the plugin via entry point in `pyproject.toml` (if not using the pre-packaged version):
 
 ```toml
 [project.entry-points."getpaid.backends"]
 paynow = "getpaid_paynow.processor:PaynowProcessor"
 ```
 
-Then configure in your Django settings (or config dict):
+Then configure in your project settings:
 
 ```python
 GETPAID_BACKEND_SETTINGS = {
@@ -80,8 +88,8 @@ GETPAID_BACKEND_SETTINGS = {
         "api_key": "your-api-key",
         "signature_key": "your-signature-key",
         "sandbox": True,
-        "notification_url": "https://shop.example.com/payments/{payment_id}/callback/",
-        "continue_url": "https://shop.example.com/payments/{payment_id}/return/",
+        "notification_url": "https://your-site.com/payments/{payment_id}/callback/",
+        "continue_url": "https://your-site.com/payments/{payment_id}/return/",
     }
 }
 ```
@@ -96,35 +104,21 @@ GETPAID_BACKEND_SETTINGS = {
 | `notification_url` | `str` | `""` | Notification URL template; use `{payment_id}` placeholder |
 | `continue_url` | `str` | `""` | Return URL template; use `{payment_id}` placeholder |
 
-## Supported Currencies
-
-PLN, EUR, USD, GBP (4 total).
-
-## Limitations
-
-Paynow does not support pre-authorization. The `charge()` and
-`release_lock()` methods raise `NotImplementedError`.
-
 ## Requirements
 
 - Python 3.12+
-- `python-getpaid-core >= 0.1.0`
+- `python-getpaid-core >= 3.0.0a2`
 - `httpx >= 0.27.0`
 
-## Related Projects
+## Links
 
-- [python-getpaid-core](https://github.com/django-getpaid/python-getpaid-core) -- core abstractions (protocols, FSM, processor base class)
-- [django-getpaid](https://github.com/django-getpaid/django-getpaid) -- Django adapter (models, views, admin)
+- **Core Library:** [python-getpaid-core](https://github.com/django-getpaid/python-getpaid-core)
+- **Official Paynow Documentation:** [docs.paynow.pl](https://docs.paynow.pl/)
+- **GitHub Repository:** [django-getpaid/python-getpaid-paynow](https://github.com/django-getpaid/python-getpaid-paynow)
 
 ## License
 
-MIT
-
-## Disclaimer
-
-This project has nothing in common with the
-[getpaid](http://code.google.com/p/getpaid/) plone project.
-It is part of the `django-getpaid` / `python-getpaid` ecosystem.
+This project is licensed under the MIT License.
 
 ## Credits
 

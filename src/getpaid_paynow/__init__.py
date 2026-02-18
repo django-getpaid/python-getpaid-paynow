@@ -1,6 +1,6 @@
 """Paynow V3 payment gateway integration for python-getpaid ecosystem."""
 
-__version__ = "0.1.2"
+__version__ = "3.0.0a2"
 
 __all__ = [
     "PaynowClient",

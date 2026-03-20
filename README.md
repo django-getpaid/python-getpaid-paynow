@@ -107,7 +107,7 @@ GETPAID_BACKEND_SETTINGS = {
 ## Requirements
 
 - Python 3.12+
-- `python-getpaid-core >= 3.0.0a2`
+- `python-getpaid-core >= 3.0.0a3`
 - `httpx >= 0.27.0`
 
 ## Links

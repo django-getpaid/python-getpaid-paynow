@@ -92,7 +92,7 @@ payment ID at runtime.
 ### 3. Process payments
 
 The framework adapter handles the rest — creating payments, redirecting
-buyers, receiving notifications, and updating payment status via the FSM.
+buyers, receiving notifications, and applying semantic payment updates.
 
 ## Sandbox vs Production
 

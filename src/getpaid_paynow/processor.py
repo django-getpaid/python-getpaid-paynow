@@ -1,17 +1,17 @@
 """Paynow payment processor."""
 
-import contextlib
 import hmac as hmac_mod
 import logging
 from decimal import Decimal
 from typing import ClassVar
 
+from getpaid_core.enums import PaymentEvent
 from getpaid_core.exceptions import InvalidCallbackError
 from getpaid_core.processor import BaseProcessor
 from getpaid_core.types import ChargeResponse
-from getpaid_core.types import PaymentStatusResponse
+from getpaid_core.types import PaymentUpdate
+from getpaid_core.types import RefundResult
 from getpaid_core.types import TransactionResult
-from transitions.core import MachineError
 
 from .client import PaynowClient
 from .types import Currency
@@ -42,8 +42,8 @@ class PaynowProcessor(BaseProcessor):
     def _get_client(self) -> PaynowClient:
         """Create a PaynowClient from processor config."""
         return PaynowClient(
-            api_key=self.get_setting("api_key"),
-            signature_key=self.get_setting("signature_key"),
+            api_key=str(self.get_setting("api_key", "")),
+            signature_key=str(self.get_setting("signature_key", "")),
             api_url=self.get_paywall_baseurl(),
         )
 
@@ -87,15 +87,13 @@ class PaynowProcessor(BaseProcessor):
 
         redirect_url = response.get("redirectUrl", "")
         payment_id = response.get("paymentId", "")
-
-        if payment_id:
-            self.payment.external_id = payment_id
+        provider_data = {"paynow_status": response.get("status", "")}
 
         return TransactionResult(
-            redirect_url=redirect_url,
-            form_data=None,
             method="GET",
-            headers={},
+            redirect_url=redirect_url or None,
+            external_id=payment_id or None,
+            provider_data=provider_data,
         )
 
     async def verify_callback(
@@ -119,9 +117,7 @@ class PaynowProcessor(BaseProcessor):
         if isinstance(raw_body, (bytes, bytearray)):
             raw_body = raw_body.decode("utf-8")
         if not isinstance(raw_body, str):
-            raise InvalidCallbackError(
-                "raw_body must be a str or bytes value."
-            )
+            raise InvalidCallbackError("raw_body must be a str or bytes value.")
 
         received_sig = ""
         for key, value in headers.items():
@@ -152,73 +148,79 @@ class PaynowProcessor(BaseProcessor):
 
     async def handle_callback(
         self, data: dict, headers: dict, **kwargs
-    ) -> None:
-        """Handle Paynow notification and update FSM.
-
-        Paynow sends notification on every status change.
-        No separate verify step is needed. The flow:
-        1. Extract paymentId and status from notification
-        2. Store paymentId as external_id
-        3. Map Paynow status to FSM transition
-
-        Notifications may arrive multiple times and out of order.
-        Uses ``contextlib.suppress(MachineError)`` for idempotent
-        transitions.
-        """
+    ) -> PaymentUpdate | None:
+        """Handle Paynow notification and return a semantic update."""
         payment_id: str = data.get("paymentId", "")
         paynow_status: str = data.get("status", "")
-
-        if payment_id:
-            self.payment.external_id = payment_id
+        modified_at: str = data.get("modifiedAt", "")
+        provider_event_id = (
+            ":".join(
+                part
+                for part in (payment_id, paynow_status, modified_at)
+                if part
+            )
+            or None
+        )
+        provider_data = {"paynow_status": paynow_status}
+        external_id = payment_id or self.payment.external_id
 
         if paynow_status == PaynowPaymentStatus.CONFIRMED:
-            if self.payment.may_trigger("confirm_payment"):
-                self.payment.confirm_payment()
-                with contextlib.suppress(MachineError):
-                    self.payment.mark_as_paid()
-            else:
-                logger.debug(
-                    "Cannot confirm payment %s (status: %s)",
-                    self.payment.id,
-                    self.payment.status,
-                )
+            return PaymentUpdate(
+                payment_event=PaymentEvent.PAYMENT_CAPTURED,
+                paid_amount=self.payment.amount_required,
+                external_id=external_id,
+                provider_event_id=provider_event_id,
+                provider_data=provider_data,
+            )
         elif paynow_status in (
             PaynowPaymentStatus.REJECTED,
             PaynowPaymentStatus.ERROR,
             PaynowPaymentStatus.EXPIRED,
             PaynowPaymentStatus.ABANDONED,
         ):
-            if hasattr(self.payment, "fail"):
-                with contextlib.suppress(MachineError):
-                    self.payment.fail()
-        else:
-            logger.debug(
-                "Paynow status %s for payment %s — no FSM action",
-                paynow_status,
-                self.payment.id,
+            return PaymentUpdate(
+                payment_event=PaymentEvent.FAILED,
+                external_id=external_id,
+                provider_event_id=provider_event_id,
+                provider_data=provider_data,
             )
+        return PaymentUpdate(
+            external_id=external_id,
+            provider_event_id=provider_event_id,
+            provider_data=provider_data,
+        )
 
-    async def fetch_payment_status(self, **kwargs) -> PaymentStatusResponse:
+    async def fetch_payment_status(self, **kwargs) -> PaymentUpdate | None:
         """PULL flow: fetch payment status from Paynow API."""
         client = self._get_client()
         response = await client.get_payment_status(
             self.payment.external_id,
         )
+        payment_id = response.get("paymentId") or self.payment.external_id
         paynow_status = response.get("status", "")
 
-        status_map: dict[str, str | None] = {
-            PaynowPaymentStatus.NEW: None,
-            PaynowPaymentStatus.PENDING: "confirm_prepared",
-            PaynowPaymentStatus.CONFIRMED: "confirm_payment",
-            PaynowPaymentStatus.REJECTED: "fail",
-            PaynowPaymentStatus.ERROR: "fail",
-            PaynowPaymentStatus.EXPIRED: "fail",
-            PaynowPaymentStatus.ABANDONED: "fail",
-        }
-
-        return PaymentStatusResponse(
-            status=status_map.get(paynow_status),
-        )
+        provider_data = {"paynow_status": paynow_status}
+        if paynow_status == PaynowPaymentStatus.CONFIRMED:
+            return PaymentUpdate(
+                payment_event=PaymentEvent.PAYMENT_CAPTURED,
+                paid_amount=self.payment.amount_required,
+                external_id=payment_id,
+                provider_event_id=f"poll:{payment_id}:{paynow_status}",
+                provider_data=provider_data,
+            )
+        if paynow_status in {
+            PaynowPaymentStatus.REJECTED,
+            PaynowPaymentStatus.ERROR,
+            PaynowPaymentStatus.EXPIRED,
+            PaynowPaymentStatus.ABANDONED,
+        }:
+            return PaymentUpdate(
+                payment_event=PaymentEvent.FAILED,
+                external_id=payment_id,
+                provider_event_id=f"poll:{payment_id}:{paynow_status}",
+                provider_data=provider_data,
+            )
+        return None
 
     async def charge(
         self, amount: Decimal | None = None, **kwargs
@@ -236,7 +238,7 @@ class PaynowProcessor(BaseProcessor):
 
     async def start_refund(
         self, amount: Decimal | None = None, **kwargs
-    ) -> Decimal:
+    ) -> RefundResult:
         """Start a refund via Paynow API."""
         client = self._get_client()
         refund_amount = amount or self.payment.amount_paid
@@ -245,13 +247,18 @@ class PaynowProcessor(BaseProcessor):
             amount=refund_amount,
         )
         refund_id = response.get("refundId", "")
+        provider_data = {}
         if refund_id:
-            self.payment.external_refund_id = refund_id
-        return refund_amount
+            provider_data["refund_id"] = refund_id
+        return RefundResult(amount=refund_amount, provider_data=provider_data)
 
     async def cancel_refund(self, **kwargs) -> bool:
         """Cancel an awaiting refund via Paynow API."""
         client = self._get_client()
-        refund_id = getattr(self.payment, "external_refund_id", "")
+        refund_id = self.payment.provider_data.get("refund_id")
+        if not refund_id:
+            refund_id = getattr(self.payment, "external_refund_id", "")
+        if not refund_id:
+            raise InvalidCallbackError("Missing refund identifier")
         await client.cancel_refund(refund_id)
         return True

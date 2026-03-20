@@ -23,7 +23,7 @@ The Paynow payment flow follows a create-redirect-notify pattern:
 ┌──────────┐  ◄────────────────────────────────┘
 │  Your    │
 │  Server  │  1. verify_callback (check HMAC signature)
-│          │  2. handle_callback (update FSM state)
+│          │  2. handle_callback (return semantic payment update)
 └──────────┘
 ```
 
@@ -46,8 +46,9 @@ The Paynow payment flow follows a create-redirect-notify pattern:
    mismatch.
 
 5. **Handle callback** — `PaynowProcessor.handle_callback()` maps the Paynow
-   status to FSM transitions: `CONFIRMED` triggers `confirm_payment` +
-   `mark_as_paid`; `REJECTED`, `ERROR`, `EXPIRED`, `ABANDONED` trigger `fail`.
+   status to semantic updates: `CONFIRMED` returns `payment_captured`,
+   `PENDING` returns `prepared`, and `REJECTED`, `ERROR`, `EXPIRED`,
+   `ABANDONED` return `failed`.
 
 :::{note}
 Unlike Przelewy24, Paynow does **not** require a separate verification step
@@ -154,17 +155,17 @@ The plugin supports both notification models:
 
 - **PULL** — `PaynowProcessor.fetch_payment_status()` calls
   `PaynowClient.get_payment_status()` to poll the payment status. Returns a
-  `PaymentStatusResponse` with the mapped FSM trigger.
+  semantic `PaymentUpdate`.
 
-| Paynow Status | Mapped FSM Trigger |
-|---------------|-------------------|
+| Paynow Status | Semantic Event |
+|---------------|----------------|
 | `NEW` | `None` |
-| `PENDING` | `confirm_prepared` |
-| `CONFIRMED` | `confirm_payment` |
-| `REJECTED` | `fail` |
-| `ERROR` | `fail` |
-| `EXPIRED` | `fail` |
-| `ABANDONED` | `fail` |
+| `PENDING` | `prepared` |
+| `CONFIRMED` | `payment_captured` |
+| `REJECTED` | `failed` |
+| `ERROR` | `failed` |
+| `EXPIRED` | `failed` |
+| `ABANDONED` | `failed` |
 
 ## Supported Operations
 

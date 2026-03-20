@@ -12,7 +12,7 @@ Paynow is a modern Polish payment provider and a subsidiary of mBank.
 The plugin is split into two layers:
 
 - **`PaynowClient`** -- low-level async HTTP client wrapping the Paynow V3 REST API. Uses `httpx.AsyncClient` with API Key authentication and HMAC-SHA256 request signing. Can be used standalone or as an async context manager for connection reuse.
-- **`PaynowProcessor`** -- high-level payment processor implementing `BaseProcessor`. Orchestrates payment creation, callback/notification handling, status polling, and refunds. Integrates with the getpaid-core FSM for state transitions.
+- **`PaynowProcessor`** -- high-level payment processor implementing `BaseProcessor`. Orchestrates payment creation, callback/notification handling, status polling, and refunds using semantic payment updates.
 
 ## Key Features
 

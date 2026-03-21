@@ -41,6 +41,42 @@ Install the package using pip:
 pip install python-getpaid-paynow
 ```
 
+Install simulator support only when you want this package to register its local
+simulator plugin with `python-getpaid-simulator`:
+
+```bash
+pip install python-getpaid-paynow[simulator]
+```
+
+This extra installs the simulator host and Litestar dependencies, then exposes
+the `paynow` plugin through the `getpaid.simulator.providers` entry point.
+
+## Simulator Plugin
+
+When `python-getpaid-paynow[simulator]` is installed alongside
+`python-getpaid-simulator`, the simulator host auto-discovers the PayNow
+plugin.
+
+Typical local setup:
+
+```bash
+pip install python-getpaid-simulator python-getpaid-paynow[simulator]
+getpaid-simulator
+```
+
+The plugin contributes:
+
+- PayNow payment and refund simulator API routes under `/paynow/v3/...`
+- PayNow authorization UI at `/sim/paynow/authorize/{payment_id}`
+- PayNow-specific webhook signing and state transitions
+
+Useful simulator environment variables:
+
+- `SIMULATOR_PAYNOW_API_KEY`
+- `SIMULATOR_PAYNOW_SIGNATURE_KEY`
+- `SIMULATOR_PAYNOW_NOTIFY_URL`
+- `SIMULATOR_PLUGIN_FAILURE_MODE` (`warn` or `strict`)
+
 ## Quick Usage
 
 ### Standalone Client

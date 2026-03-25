@@ -29,6 +29,7 @@ def load_provider_config(
 ) -> dict[str, Any]:
     environment = env or os.environ
     return {
+        "amount_minor_unit_places": 2,
         "api_key": environment.get(
             "SIMULATOR_PAYNOW_API_KEY",
             "sim-paynow-api-key",

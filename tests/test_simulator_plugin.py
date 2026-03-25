@@ -96,10 +96,15 @@ def test_load_provider_config_reads_env_overrides(
     )
 
     assert load_provider_config() == {
+        "amount_minor_unit_places": 2,
         "api_key": "override-api-key",
         "signature_key": "override-signature",
         "notify_url": "https://merchant.example/paynow/callback",
     }
+
+
+def test_load_provider_config_includes_amount_minor_unit_places() -> None:
+    assert load_provider_config()["amount_minor_unit_places"] == 2
 
 
 @pytest.mark.asyncio

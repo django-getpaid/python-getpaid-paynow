@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
+from decimal import InvalidOperation
 from typing import Any
 from typing import TypedDict
 from typing import cast
@@ -113,6 +115,24 @@ PAYMENT_METHODS: list[PaymentMethodGroup] = [
 
 def _provider_config(request: Request[Any, Any, Any]) -> dict[str, Any]:
     return dict(request.app.state.provider_configs["paynow"])
+
+
+def _format_amount_for_display(
+    payment: dict[str, Any],
+    provider_config: dict[str, Any],
+) -> str:
+    amount_raw = payment.get("amount", payment.get("totalAmount", 0))
+    try:
+        amount_value = Decimal(str(amount_raw))
+    except (InvalidOperation, TypeError, ValueError):
+        return str(amount_raw)
+
+    minor_unit_places = int(provider_config.get("amount_minor_unit_places", 2))
+    if minor_unit_places >= 0:
+        amount_value /= Decimal(10) ** minor_unit_places
+
+    currency = payment.get("currency", payment.get("currencyCode", "PLN"))
+    return f"{amount_value:.2f} {currency}"
 
 
 def _error_response(
@@ -346,15 +366,10 @@ async def paynow_authorize_get(
     if payment.get("status") in ("CONFIRMED", "REJECTED"):
         raise HTTPException(status_code=400, detail="Payment already processed")
 
-    amount_raw = payment.get("amount", payment.get("totalAmount", 0))
-    try:
-        amount_value = float(amount_raw) / 100
-        formatted_amount = (
-            f"{amount_value:.2f} "
-            f"{payment.get('currency', payment.get('currencyCode', 'PLN'))}"
-        )
-    except (ValueError, TypeError):
-        formatted_amount = str(amount_raw)
+    formatted_amount = _format_amount_for_display(
+        payment,
+        _provider_config(request),
+    )
 
     return Template(
         template_name="authorize.html",
